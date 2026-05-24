@@ -12,6 +12,10 @@ jobs:
     name: Lint
     runs-on: ubuntu-latest
 
+    permissions:
+      contents: read
+      security-events: write
+
     steps:
 
       - name: Checkout
@@ -37,6 +41,15 @@ jobs:
 
       - name: Check dependency tidiness
         run: go mod tidy -diff
+
+      - name: Check for vulnerable dependency use
+        run: go tool govulncheck -format sarif ./... | jq "(.runs[].tool.driver.rules[]?.properties.tags)? |= unique" > govulncheck.sarif
+
+      - name: Upload SARIF
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: govulncheck.sarif
+          category: govulncheck
 
   build:
 
