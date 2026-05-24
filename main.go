@@ -40,19 +40,19 @@ type Commit struct {
 }
 
 type Event struct {
-	ID    string `json:"id"`
-	Type  string `json:"type"`
-	Actor Actor  `json:"actor"`
+	ID    string
+	Type  string
+	Actor Actor
 	Repo  struct {
 		ID   int
 		Name string
-	} `json:"repo"`
+	}
 	Payload struct {
 		Ref    string
 		Head   string
 		Before string
-	} `json:"payload"`
-	Public    bool      `json:"public"`
+	}
+	Public    bool
 	CreatedAt time.Time `json:"created_at"`
 }
 
