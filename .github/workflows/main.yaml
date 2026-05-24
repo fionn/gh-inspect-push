@@ -68,3 +68,8 @@ jobs:
         run: gh inspect-push "$GITHUB_SHA"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Execute with JSON
+        run: gh inspect-push --json "$GITHUB_SHA" | jq .
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
