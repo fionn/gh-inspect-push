@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"strings"
@@ -15,14 +16,30 @@ const colorYellow = "\033[0;33m"
 const termReset = "\033[0m"
 
 type CommitAuthor struct {
-	Name  string
-	Email string
-	Date  time.Time
+	Name  string    `json:"name"`
+	Email string    `json:"email"`
+	Date  time.Time `json:"date"`
 }
 
 type Actor struct {
-	ID    int
-	Login string
+	ID    int    `json:"id"`
+	Login string `json:"login"`
+}
+
+type AuthorActor struct {
+	CommitAuthor
+	Actor
+}
+
+type Pusher struct {
+	Actor
+	Date time.Time `json:"date"`
+}
+
+type Verification struct {
+	Verified   bool       `json:"verified"`
+	Reason     string     `json:"reason"`
+	VerifiedAt *time.Time `json:"verified_at"`
 }
 
 type Commit struct {
@@ -31,10 +48,7 @@ type Commit struct {
 		Author       CommitAuthor
 		Committer    CommitAuthor
 		Message      string
-		Verification struct {
-			Verified bool
-			Reason   string
-		}
+		Verification Verification
 	}
 	Author    Actor
 	Committer Actor
@@ -60,14 +74,26 @@ type Event struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-func parseArgs() (repository.Repository, string, error) {
+type CommitMetadata struct {
+	SHA          string       `json:"sha"`
+	Ref          string       `json:"ref"`
+	Parents      []string     `json:"parents"`
+	Author       AuthorActor  `json:"author"`
+	Committer    AuthorActor  `json:"committer"`
+	Pusher       Pusher       `json:"pusher"`
+	Message      string       `json:"message"`
+	Verification Verification `json:"verification"`
+}
+
+func parseArgs() (repository.Repository, string, bool, error) {
 	repoOwnerAndName := flag.String("repo", "", "Optional repository in owner/name format")
+	useJSON := flag.Bool("json", false, "Print output in JSON format")
 	flag.Parse()
 
 	ref := "HEAD"
 	arguments := flag.Args()
 	if len(arguments) > 1 {
-		return repository.Repository{}, "", fmt.Errorf("too many arguments, expected at most one")
+		return repository.Repository{}, "", false, fmt.Errorf("too many arguments, expected at most one")
 	}
 	if len(arguments) == 1 {
 		ref = arguments[0]
@@ -76,20 +102,20 @@ func parseArgs() (repository.Repository, string, error) {
 	if *repoOwnerAndName != "" {
 		repo, err := repository.Parse(*repoOwnerAndName)
 		if err != nil {
-			return repository.Repository{}, "", fmt.Errorf("failed to parse repository \"%s\": %w", *repoOwnerAndName, err)
+			return repository.Repository{}, "", false, fmt.Errorf("failed to parse repository \"%s\": %w", *repoOwnerAndName, err)
 		}
-		return repo, ref, nil
+		return repo, ref, *useJSON, nil
 	}
 
 	repo, err := repository.Current()
 	if err != nil {
-		return repository.Repository{}, "", fmt.Errorf("not a Git repository or couldn't find remote: %w", err)
+		return repository.Repository{}, "", false, fmt.Errorf("not a Git repository or couldn't find remote: %w", err)
 	}
-	return repo, ref, nil
+	return repo, ref, *useJSON, nil
 }
 
 func main() {
-	repo, ref, err := parseArgs()
+	repo, ref, useJSON, err := parseArgs()
 	if err != nil {
 		panic(err)
 	}
@@ -127,15 +153,51 @@ func main() {
 		panic("couldn't find matching event")
 	}
 
-	fmt.Printf("%scommit %s (%s)%s\n", colorYellow, commit.SHA, colorBoldRed+event.Payload.Ref+colorYellow, termReset)
+	var parents []string
+	for _, parent := range commit.Parents {
+		parents = append(parents, parent.SHA)
+	}
 
-	fmt.Printf("Author:     %s <%s> (@%s)\n", commit.Commit.Author.Name, commit.Commit.Author.Email, commit.Author.Login)
-	fmt.Printf("AuthorDate: %s\n", commit.Commit.Author.Date)
-	fmt.Printf("Commit:     %s <%s> (@%s)\n", commit.Commit.Committer.Name, commit.Commit.Committer.Email, commit.Committer.Login)
-	fmt.Printf("CommitDate: %s\n", commit.Commit.Committer.Date)
-	fmt.Printf("Pusher:     %s (%d)\n", event.Actor.Login, event.Actor.ID)
-	fmt.Printf("PusherDate: %s\n", event.CreatedAt)
-	fmt.Printf("Verified:   %t (%s)\n", commit.Commit.Verification.Verified, commit.Commit.Verification.Reason)
+	metadata := CommitMetadata{
+		SHA:     commit.SHA,
+		Ref:     event.Payload.Ref,
+		Parents: parents,
+		Author: AuthorActor{
+			commit.Commit.Author,
+			commit.Author,
+		},
+		Committer: AuthorActor{
+			commit.Commit.Committer,
+			commit.Committer,
+		},
+		Pusher: Pusher{
+			event.Actor,
+			event.CreatedAt,
+		},
+		Message:      commit.Commit.Message,
+		Verification: commit.Commit.Verification,
+	}
 
-	fmt.Printf("\n\t%s\n", strings.ReplaceAll(commit.Commit.Message, "\n", "\n\t"))
+	if useJSON {
+		metadataJSON, err := json.MarshalIndent(metadata, "", "    ")
+		if err != nil {
+			panic(err)
+		}
+		fmt.Println(string(metadataJSON))
+	} else {
+		fmt.Printf("%scommit %s (%s)%s\n", colorYellow, metadata.SHA, colorBoldRed+metadata.Ref+colorYellow, termReset)
+
+		fmt.Printf("Author:     %s <%s> (@%s)\n", metadata.Author.Name, metadata.Author.Email, metadata.Author.Login)
+		fmt.Printf("AuthorDate: %s\n", metadata.Author.Date)
+
+		fmt.Printf("Commit:     %s <%s> (@%s)\n", metadata.Committer.Name, metadata.Committer.Email, metadata.Committer.Login)
+		fmt.Printf("CommitDate: %s\n", metadata.Committer.Date)
+
+		fmt.Printf("Pusher:     %s (%d)\n", metadata.Pusher.Login, metadata.Pusher.ID)
+		fmt.Printf("PusherDate: %s\n", metadata.Pusher.Date)
+
+		fmt.Printf("Verified:   %t (%s)\n", metadata.Verification.Verified, metadata.Verification.Reason)
+
+		fmt.Printf("\n\t%s\n", strings.ReplaceAll(metadata.Message, "\n", "\n\t"))
+	}
 }
