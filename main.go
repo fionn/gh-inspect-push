@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -117,28 +118,28 @@ func parseArgs() (repository.Repository, string, bool, error) {
 func main() {
 	repo, ref, useJSON, err := parseArgs()
 	if err != nil {
-		panic(err)
+		log.Fatalf("Failed to parse arguments: %s", err)
 	}
 
 	client, err := api.DefaultRESTClient()
 	if err != nil {
-		panic(err)
+		log.Fatalf("Failed to create REST client: %s", err)
 	}
 
 	var commit Commit
 	err = client.Get(fmt.Sprintf("repos/%s/%s/commits/%s", repo.Owner, repo.Name, ref), &commit)
 	if err != nil {
-		panic(err)
+		log.Fatalf("Failed to get commit %s from %s/%s: %s", ref, repo.Owner, repo.Name, err)
 	}
 
 	var events []Event
 	err = client.Get(fmt.Sprintf("repos/%s/%s/events", repo.Owner, repo.Name), &events)
 	if err != nil {
-		panic(err)
+		log.Fatalf("Failed to get events for %s/%s: %s", repo.Owner, repo.Name, err)
 	}
 
 	if len(events) == 0 {
-		panic("no events")
+		log.Fatalf("Repository %s/%s returned no events", repo.Owner, repo.Name)
 	}
 
 	var event Event
@@ -150,7 +151,7 @@ func main() {
 	}
 
 	if event == (Event{}) {
-		panic("couldn't find matching event")
+		log.Fatalf("Failed to find event for commit %s", commit.SHA)
 	}
 
 	var parents []string
@@ -181,7 +182,7 @@ func main() {
 	if useJSON {
 		metadataJSON, err := json.MarshalIndent(metadata, "", "    ")
 		if err != nil {
-			panic(err)
+			log.Fatalf("Failed to serialise data: %s", err)
 		}
 		fmt.Println(string(metadataJSON))
 	} else {
