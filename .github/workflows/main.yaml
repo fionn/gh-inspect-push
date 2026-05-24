@@ -60,3 +60,11 @@ jobs:
 
       - name: Build
         run: go build -v
+
+      - name: Install gh extension
+        run: gh extension install .
+
+      - name: Execute
+        run: gh inspect-push "$GITHUB_SHA"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
