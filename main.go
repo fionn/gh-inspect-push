@@ -1,16 +1,12 @@
 package main
 
 import (
-	"bytes"
-	"encoding/json"
 	"flag"
 	"fmt"
-	"net/http"
 	"strings"
 	"time"
 
 	"github.com/cli/go-gh/v2/pkg/api"
-	"github.com/cli/go-gh/v2/pkg/jq"
 	"github.com/cli/go-gh/v2/pkg/repository"
 )
 
@@ -105,30 +101,26 @@ func main() {
 		panic(err)
 	}
 
-	resp, err := client.Request(http.MethodGet, fmt.Sprintf("repos/%s/%s/events", repo.Owner, repo.Name), nil)
+	var events []Event
+	err = client.Get(fmt.Sprintf("repos/%s/%s/events", repo.Owner, repo.Name), &events)
 	if err != nil {
 		panic(err)
-	}
-	defer func() {
-		err = resp.Body.Close()
-		if err != nil {
-			panic(err)
-		}
-	}()
-	if resp.StatusCode != http.StatusOK {
-		panic(resp.StatusCode)
 	}
 
-	var out bytes.Buffer
-	err = jq.Evaluate(resp.Body, &out, fmt.Sprintf(".[] | select(.type == \"PushEvent\" and (.payload.head == \"%s\"))", commit.SHA))
-	if err != nil {
-		panic(err)
+	if len(events) == 0 {
+		panic("no events")
 	}
 
 	var event Event
-	err = json.NewDecoder(&out).Decode(&event)
-	if err != nil {
-		panic(err)
+	for _, candidateEvent := range events {
+		if candidateEvent.Type == "PushEvent" && candidateEvent.Payload.Head == commit.SHA {
+			event = candidateEvent
+			break
+		}
+	}
+
+	if event == (Event{}) {
+		panic("couldn't find matching event")
 	}
 
 	fmt.Printf("commit %s (%s)\n", commit.SHA, event.Payload.Ref)
