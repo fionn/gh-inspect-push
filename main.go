@@ -10,6 +10,10 @@ import (
 	"github.com/cli/go-gh/v2/pkg/repository"
 )
 
+const colorBoldRed = "\033[1;31m"
+const colorYellow = "\033[0;33m"
+const termReset = "\033[0m"
+
 type CommitAuthor struct {
 	Name  string
 	Email string
@@ -123,7 +127,8 @@ func main() {
 		panic("couldn't find matching event")
 	}
 
-	fmt.Printf("commit %s (%s)\n", commit.SHA, event.Payload.Ref)
+	fmt.Printf("%scommit %s (%s)%s\n", colorYellow, commit.SHA, colorBoldRed+event.Payload.Ref+colorYellow, termReset)
+
 	fmt.Printf("Author:     %s <%s> (@%s)\n", commit.Commit.Author.Name, commit.Commit.Author.Email, commit.Author.Login)
 	fmt.Printf("AuthorDate: %s\n", commit.Commit.Author.Date)
 	fmt.Printf("Commit:     %s <%s> (@%s)\n", commit.Commit.Committer.Name, commit.Commit.Committer.Email, commit.Committer.Login)
