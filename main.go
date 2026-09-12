@@ -2,9 +2,11 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
+	"net/http"
 	"strings"
 	"time"
 
@@ -128,21 +130,36 @@ func parseArgs() (repository.Repository, string, bool, error) {
 }
 
 func (c Client) commitMetadataFromEvents(repo repository.Repository, commit Commit) (*CommitMetadata, error) {
-	// TODO: paginate this.
-	var events []Event
-	err := c.Get(fmt.Sprintf("repos/%s/%s/events", repo.Owner, repo.Name), &events)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get events for %s/%s: %w", repo.Owner, repo.Name, err)
-	}
+	const perPage = 100
 
-	if len(events) == 0 {
-		return nil, fmt.Errorf("repository %s/%s returned no events", repo.Owner, repo.Name)
-	}
+	event := Event{}
+	for page := 1; event == (Event{}); page++ {
+		var events []Event
+		path := fmt.Sprintf("repos/%s/%s/events?per_page=%d&page=%d", repo.Owner, repo.Name, perPage, page)
+		err := c.Get(path, &events)
+		if err != nil {
+			var httpErr *api.HTTPError
+			if page > 1 && errors.As(err, &httpErr) && httpErr.StatusCode == http.StatusUnprocessableEntity {
+				break
+			}
+			return nil, fmt.Errorf("failed to get events for %s/%s: %w", repo.Owner, repo.Name, err)
+		}
 
-	var event Event
-	for _, candidateEvent := range events {
-		if candidateEvent.Type == "PushEvent" && candidateEvent.Payload.Head == commit.SHA {
-			event = candidateEvent
+		if len(events) == 0 {
+			if page == 1 {
+				return nil, fmt.Errorf("repository %s/%s returned no events", repo.Owner, repo.Name)
+			}
+			break
+		}
+
+		for _, candidateEvent := range events {
+			if candidateEvent.Type == "PushEvent" && candidateEvent.Payload.Head == commit.SHA {
+				event = candidateEvent
+				break
+			}
+		}
+
+		if len(events) < perPage {
 			break
 		}
 	}

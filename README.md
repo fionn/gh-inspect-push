@@ -56,7 +56,11 @@ We only look at events of type `PushEvent` as these are the only type of event t
 
 ### Push Events Too Old
 
-If querying a repository that has many other event types (e.g. `IssuesEvent`, `PullRequestEvent`, etc.), it might be that the `PushEvents` are too old. We get ~30 events returned to us so if there are 30 more recent events then we will not see it. This is because `gh-gh`'s `client.Get` doesn't support pagination. We could implement this ourselves by making the raw request, but have not done so. Even without this constraint, it might be that the most recent push was a long time ago and the API no longer returns this event.
+If querying a repository that has many other event types (e.g. `IssuesEvent`, `PullRequestEvent`, etc.), it might be that the `PushEvents` are too old.
+
+> The timeline will include up to 300 events. Only events created within the past 30 days will be included. Events older than 30 days will not be included (even if the total number of events in the timeline is less than 300).
+
+(From [_REST API endpoints for events_ § _About GitHub events_](https://docs.github.com/en/rest/activity/events?apiVersion=2026-03-10#about-github-events).)
 
 ### Push Events Missing
 
