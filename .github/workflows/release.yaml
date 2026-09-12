@@ -10,6 +10,7 @@ jobs:
 
     name: Release
     runs-on: ubuntu-latest
+    cache-mode: write-only
 
     permissions:
       contents: write
