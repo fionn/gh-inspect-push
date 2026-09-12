@@ -25,7 +25,7 @@ jobs:
           persist-credentials: false
 
       - name: Precompile
-        uses: cli/gh-extension-precompile@v2
+        uses: cli/gh-extension-precompile@v2.2.0
         with:
           generate_attestations: true
           go_version_file: go.mod
