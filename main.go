@@ -300,12 +300,11 @@ func main() {
 		log.Fatalf("Failed to get commit %s from %s/%s: %s", ref, repo.Owner, repo.Name, err)
 	}
 
-	metadata, err := client.commitMetadataFromEvents(repo, commit)
-	if err != nil {
-		log.Printf("Failed to get commit metadata from event: %s", err)
+	metadata, eventsErr := client.commitMetadataFromEvents(repo, commit)
+	if eventsErr != nil {
 		metadata, err = client.commitMetadataFromActivity(repo, commit)
 		if err != nil {
-			log.Fatalf("Failed to get commit metadata from activity: %s", err)
+			log.Fatalf("Failed to get commit metadata: %s", errors.Join(eventsErr, err))
 		}
 	}
 
