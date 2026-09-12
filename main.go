@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -17,6 +18,19 @@ import (
 const colorBoldRed = "\033[1;31m"
 const colorYellow = "\033[0;33m"
 const termReset = "\033[0m"
+
+const perPage = 100
+
+var linkRE = regexp.MustCompile(`<([^>]+)>;\s*rel="([^"]+)"`)
+
+func findNextPage(response *http.Response) (string, bool) {
+	for _, m := range linkRE.FindAllStringSubmatch(response.Header.Get("Link"), -1) {
+		if len(m) > 2 && m[2] == "next" {
+			return m[1], true
+		}
+	}
+	return "", false
+}
 
 type Client struct {
 	api.RESTClient
@@ -130,8 +144,6 @@ func parseArgs() (repository.Repository, string, bool, error) {
 }
 
 func (c Client) commitMetadataFromEvents(repo repository.Repository, commit Commit) (*CommitMetadata, error) {
-	const perPage = 100
-
 	event := Event{}
 	for page := 1; event == (Event{}); page++ {
 		var events []Event
@@ -197,21 +209,43 @@ func (c Client) commitMetadataFromEvents(repo repository.Repository, commit Comm
 }
 
 func (c Client) commitMetadataFromActivity(repo repository.Repository, commit Commit) (*CommitMetadata, error) {
-	// TODO: paginate this.
-	var activities []Activity
-	err := c.Get(fmt.Sprintf("repos/%s/%s/activity", repo.Owner, repo.Name), &activities)
-	if err != nil {
-		return nil, err
-	}
+	requestPath := fmt.Sprintf("repos/%s/%s/activity?per_page=%d", repo.Owner, repo.Name, perPage)
 
-	if len(activities) == 0 {
-		return nil, fmt.Errorf("repository %s/%s returned no activities", repo.Owner, repo.Name)
-	}
+	activity := Activity{}
+	firstPage := true
+	for {
+		response, err := c.Request(http.MethodGet, requestPath, nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get activity for %s/%s: %w", repo.Owner, repo.Name, err)
+		}
 
-	var activity Activity
-	for _, candidateActivity := range activities {
-		if candidateActivity.After == commit.SHA {
-			activity = candidateActivity
+		var activities []Activity
+		decoder := json.NewDecoder(response.Body)
+		err = decoder.Decode(&activities)
+		if closeErr := response.Body.Close(); closeErr != nil {
+			return nil, closeErr
+		}
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode activity for %s/%s: %w", repo.Owner, repo.Name, err)
+		}
+
+		if firstPage && len(activities) == 0 {
+			return nil, fmt.Errorf("repository %s/%s returned no activities", repo.Owner, repo.Name)
+		}
+		firstPage = false
+
+		for _, candidateActivity := range activities {
+			if candidateActivity.After == commit.SHA {
+				activity = candidateActivity
+				break
+			}
+		}
+		if activity != (Activity{}) {
+			break
+		}
+
+		var hasNextPage bool
+		if requestPath, hasNextPage = findNextPage(response); !hasNextPage {
 			break
 		}
 	}
