@@ -79,6 +79,14 @@ type Event struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+type Activity struct {
+	Ref       string
+	Before    string
+	After     string
+	Timestamp time.Time
+	Actor     Actor
+}
+
 type CommitMetadata struct {
 	SHA          string       `json:"sha"`
 	Ref          string       `json:"ref"`
@@ -171,6 +179,58 @@ func (c Client) commitMetadataFromEvents(repo repository.Repository, commit Comm
 	return &metadata, nil
 }
 
+func (c Client) commitMetadataFromActivity(repo repository.Repository, commit Commit) (*CommitMetadata, error) {
+	// TODO: paginate this.
+	var activities []Activity
+	err := c.Get(fmt.Sprintf("repos/%s/%s/activity", repo.Owner, repo.Name), &activities)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(activities) == 0 {
+		return nil, fmt.Errorf("repository %s/%s returned no activities", repo.Owner, repo.Name)
+	}
+
+	var activity Activity
+	for _, candidateActivity := range activities {
+		if candidateActivity.After == commit.SHA {
+			activity = candidateActivity
+			break
+		}
+	}
+
+	if activity == (Activity{}) {
+		return nil, fmt.Errorf("failed to find activity for commit %s", commit.SHA)
+	}
+
+	var parents []string
+	for _, parent := range commit.Parents {
+		parents = append(parents, parent.SHA)
+	}
+
+	metadata := CommitMetadata{
+		SHA:     commit.SHA,
+		Ref:     activity.Ref,
+		Parents: parents,
+		Author: AuthorActor{
+			commit.Commit.Author,
+			commit.Author,
+		},
+		Committer: AuthorActor{
+			commit.Commit.Committer,
+			commit.Committer,
+		},
+		Pusher: Pusher{
+			activity.Actor,
+			activity.Timestamp,
+		},
+		Message:      commit.Commit.Message,
+		Verification: commit.Commit.Verification,
+	}
+
+	return &metadata, nil
+}
+
 func main() {
 	repo, ref, useJSON, err := parseArgs()
 	if err != nil {
@@ -191,7 +251,11 @@ func main() {
 
 	metadata, err := client.commitMetadataFromEvents(repo, commit)
 	if err != nil {
-		log.Fatalf("Failed to get commit metadata from event: %s", err)
+		log.Printf("Failed to get commit metadata from event: %s", err)
+		metadata, err = client.commitMetadataFromActivity(repo, commit)
+		if err != nil {
+			log.Fatalf("Failed to get commit metadata from activity: %s", err)
+		}
 	}
 
 	if useJSON {

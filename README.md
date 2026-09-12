@@ -48,6 +48,8 @@ Verified:   false (unsigned)
 
 ## Caveats
 
+Sometimes we fail to find a push event corresponding to a given commit. We use the activity log as a fallback in such cases.
+
 ### Push Events Only
 
 We only look at events of type `PushEvent` as these are the only type of event that can be used to join on the commit hash. If a commit is pushed to a new branch, this creates a `CreateEvent`, which does not contain the commit hash. So if invoked with a commit that created a branch and wasn't pushed elsewhere, this will result in a failed lookup.
