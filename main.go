@@ -16,6 +16,10 @@ const colorBoldRed = "\033[1;31m"
 const colorYellow = "\033[0;33m"
 const termReset = "\033[0m"
 
+type Client struct {
+	api.RESTClient
+}
+
 type CommitAuthor struct {
 	Name  string    `json:"name"`
 	Email string    `json:"email"`
@@ -115,31 +119,16 @@ func parseArgs() (repository.Repository, string, bool, error) {
 	return repo, ref, *useJSON, nil
 }
 
-func main() {
-	repo, ref, useJSON, err := parseArgs()
-	if err != nil {
-		log.Fatalf("Failed to parse arguments: %s", err)
-	}
-
-	client, err := api.DefaultRESTClient()
-	if err != nil {
-		log.Fatalf("Failed to create REST client: %s", err)
-	}
-
-	var commit Commit
-	err = client.Get(fmt.Sprintf("repos/%s/%s/commits/%s", repo.Owner, repo.Name, ref), &commit)
-	if err != nil {
-		log.Fatalf("Failed to get commit %s from %s/%s: %s", ref, repo.Owner, repo.Name, err)
-	}
-
+func (c Client) commitMetadataFromEvents(repo repository.Repository, commit Commit) (*CommitMetadata, error) {
+	// TODO: paginate this.
 	var events []Event
-	err = client.Get(fmt.Sprintf("repos/%s/%s/events", repo.Owner, repo.Name), &events)
+	err := c.Get(fmt.Sprintf("repos/%s/%s/events", repo.Owner, repo.Name), &events)
 	if err != nil {
-		log.Fatalf("Failed to get events for %s/%s: %s", repo.Owner, repo.Name, err)
+		return nil, fmt.Errorf("failed to get events for %s/%s: %w", repo.Owner, repo.Name, err)
 	}
 
 	if len(events) == 0 {
-		log.Fatalf("Repository %s/%s returned no events", repo.Owner, repo.Name)
+		return nil, fmt.Errorf("repository %s/%s returned no events", repo.Owner, repo.Name)
 	}
 
 	var event Event
@@ -151,7 +140,7 @@ func main() {
 	}
 
 	if event == (Event{}) {
-		log.Fatalf("Failed to find event for commit %s", commit.SHA)
+		return nil, fmt.Errorf("failed to find event for commit %s", commit.SHA)
 	}
 
 	var parents []string
@@ -177,6 +166,32 @@ func main() {
 		},
 		Message:      commit.Commit.Message,
 		Verification: commit.Commit.Verification,
+	}
+
+	return &metadata, nil
+}
+
+func main() {
+	repo, ref, useJSON, err := parseArgs()
+	if err != nil {
+		log.Fatalf("Failed to parse arguments: %s", err)
+	}
+
+	_client, err := api.DefaultRESTClient()
+	if err != nil {
+		log.Fatalf("Failed to create REST client: %s", err)
+	}
+	client := Client{*_client}
+
+	var commit Commit
+	err = client.Get(fmt.Sprintf("repos/%s/%s/commits/%s", repo.Owner, repo.Name, ref), &commit)
+	if err != nil {
+		log.Fatalf("Failed to get commit %s from %s/%s: %s", ref, repo.Owner, repo.Name, err)
+	}
+
+	metadata, err := client.commitMetadataFromEvents(repo, commit)
+	if err != nil {
+		log.Fatalf("Failed to get commit metadata from event: %s", err)
 	}
 
 	if useJSON {
