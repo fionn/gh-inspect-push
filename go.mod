@@ -2,7 +2,7 @@ module github.com/fionn/gh-inspect-push
 
 go 1.27.1
 
-require github.com/cli/go-gh/v2 v2.16.0
+require github.com/cli/go-gh/v2 v2.16.1
 
 require (
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
