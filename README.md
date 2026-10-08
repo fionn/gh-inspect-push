@@ -5,17 +5,8 @@ This can include the pusher identity, push time, the GitHub identity of the auth
 
 ## Installation
 
-### Normal
-
 ```shell
 gh extension install fionn/gh-inspect-push
-```
-
-### Development
-
-```shell
-go build
-gh extension install .
 ```
 
 ## Usage
