@@ -1,18 +1,22 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"regexp"
 	"strings"
 	"time"
 
 	"github.com/cli/go-gh/v2/pkg/api"
+	"github.com/cli/go-gh/v2/pkg/jsonpretty"
 	"github.com/cli/go-gh/v2/pkg/repository"
+	"github.com/cli/go-gh/v2/pkg/term"
 )
 
 const colorBoldRed = "\033[1;31m"
@@ -309,11 +313,13 @@ func main() {
 	}
 
 	if useJSON {
-		metadataJSON, err := json.MarshalIndent(metadata, "", "    ")
+		buf, err := json.Marshal(metadata)
 		if err != nil {
 			log.Fatalf("Failed to serialise data: %s", err)
 		}
-		fmt.Println(string(metadataJSON))
+		if err = jsonpretty.Format(os.Stdout, bytes.NewReader(buf), "  ", term.IsTerminal(os.Stdout)); err != nil {
+			log.Fatalf("Failed to format JSON: %s", err)
+		}
 	} else {
 		fmt.Printf("%scommit %s (%s)%s\n", colorYellow, metadata.SHA, colorBoldRed+metadata.Ref+colorYellow, termReset)
 
