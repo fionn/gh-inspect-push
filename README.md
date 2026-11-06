@@ -32,7 +32,7 @@ Commit:     Fionn Fitzmaurice <fionn@github.com> (@fionn)
 CommitDate: 2026-05-24 11:53:05 +0000 UTC
 Pusher:     fionn (1897918)
 PusherDate: 2026-05-24 11:55:30 +0000 UTC
-Verified:   false (unsigned)
+Verified:   unsigned
 
     Add documentation
 ```

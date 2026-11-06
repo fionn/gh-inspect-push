@@ -21,6 +21,8 @@ import (
 
 const colorBoldRed = "\033[1;31m"
 const colorYellow = "\033[0;33m"
+const colorGreen = "\033[0;32m"
+const colorDim = "\033[0;2m"
 const termReset = "\033[0m"
 
 const perPage = 100
@@ -332,7 +334,13 @@ func main() {
 		fmt.Printf("Pusher:     %s (%d)\n", metadata.Pusher.Login, metadata.Pusher.ID)
 		fmt.Printf("PusherDate: %s\n", metadata.Pusher.Date)
 
-		fmt.Printf("Verified:   %t (%s)\n", metadata.Verification.Verified, metadata.Verification.Reason)
+		var colorSignature string
+		if metadata.Verification.Verified {
+			colorSignature = colorGreen
+		} else {
+			colorSignature = colorDim
+		}
+		fmt.Printf("Signature:  %s%s%s\n", colorSignature, metadata.Verification.Reason, termReset)
 
 		fmt.Printf("\n\t%s\n", strings.ReplaceAll(metadata.Message, "\n", "\n\t"))
 	}
